@@ -5,12 +5,13 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
-using System.Windows.Media;
 using GongSolutions.Wpf.DragDrop.Utilities;
 using JetBrains.Annotations;
 
 namespace GongSolutions.Wpf.DragDrop
 {
+    using System.Windows.Input;
+
     /// <summary>
     /// Holds information about a the target of a drag drop operation.
     /// </summary>
@@ -24,6 +25,182 @@ namespace GongSolutions.Wpf.DragDrop
     {
         private ItemsControl itemParent = null;
         private UIElement item = null;
+
+        public DropInfo(object sender, TouchEventArgs e, [CanBeNull] DragInfo dragInfo)
+        {
+            this.DragInfo = dragInfo;
+            this.KeyStates = DragDropKeyStates.None;
+            var dataFormat = dragInfo?.DataFormat;
+            
+            this.VisualTarget = sender as UIElement;
+
+            if (!this.VisualTarget.IsDropTarget())
+            {
+                var elementToDropAt = this.VisualTarget.TryGetNextAncestorDropTargetElement();
+                if (elementToDropAt != null)
+                {
+                    this.VisualTarget = elementToDropAt;
+                }
+
+                // try find ScrollViewer
+                TryToFindScrollViewer();
+
+                this.TargetScrollingMode = this.VisualTarget != null ? DragDrop.GetDropScrollingMode(this.VisualTarget) : ScrollingMode.Both;
+
+                // visual target can be null, so give us a point...
+                this.DropPosition = this.VisualTarget != null ? e.GetTouchPoint(this.VisualTarget).Position : new Point();
+
+                if (this.VisualTarget is TabControl)
+                {
+                    if (!HitTestUtilities.HitTest4Type<TabPanel>(this.VisualTarget, this.DropPosition))
+                    {
+                        return;
+                    }
+                }
+
+                if (this.VisualTarget is ItemsControl)
+                {
+                    var itemsControl = (ItemsControl)this.VisualTarget;
+                    //System.Diagnostics.Debug.WriteLine(">>> Name = {0}", itemsControl.Name);
+                    // get item under the mouse
+                    item = itemsControl.GetItemContainerAt(this.DropPosition);
+                    var directlyOverItem = item != null;
+
+                    this.TargetGroup = itemsControl.FindGroup(this.DropPosition);
+                    this.VisualTargetOrientation = itemsControl.GetItemsPanelOrientation();
+                    this.VisualTargetFlowDirection = itemsControl.GetItemsPanelFlowDirection();
+
+                    if (item == null)
+                    {
+                        // ok, no item found, so maybe we can found an item at top, left, right or bottom
+                        item = itemsControl.GetItemContainerAt(this.DropPosition, this.VisualTargetOrientation);
+                        directlyOverItem = DropPosition.DirectlyOverElement(this.item, itemsControl);
+                    }
+
+                    if (item == null && this.TargetGroup != null && this.TargetGroup.IsBottomLevel)
+                    {
+                        var itemData = this.TargetGroup.Items.FirstOrDefault();
+                        if (itemData != null)
+                        {
+                            item = itemsControl.ItemContainerGenerator.ContainerFromItem(itemData) as UIElement;
+                            directlyOverItem = DropPosition.DirectlyOverElement(this.item, itemsControl);
+                        }
+                    }
+
+                    if (item != null)
+                    {
+                        itemParent = ItemsControl.ItemsControlFromItemContainer(item);
+                        this.VisualTargetOrientation = itemParent.GetItemsPanelOrientation();
+                        this.VisualTargetFlowDirection = itemParent.GetItemsPanelFlowDirection();
+
+                        this.InsertIndex = itemParent.ItemContainerGenerator.IndexFromContainer(item);
+                        this.TargetCollection = itemParent.ItemsSource ?? itemParent.Items;
+
+                        var tvItem = item as TreeViewItem;
+
+                        if (directlyOverItem || tvItem != null)
+                        {
+                            this.VisualTargetItem = item;
+                            this.TargetItem = itemParent.ItemContainerGenerator.ItemFromContainer(item);
+                        }
+
+                        var expandedTVItem = tvItem != null && tvItem.HasHeader && tvItem.HasItems && tvItem.IsExpanded;
+                        var itemRenderSize = expandedTVItem ? tvItem.GetHeaderSize() : item.RenderSize;
+
+                        if (this.VisualTargetOrientation == Orientation.Vertical)
+                        {
+                            var currentYPos = e.GetTouchPoint(item).Position.Y;
+                            var targetHeight = itemRenderSize.Height;
+
+                            var topGap = targetHeight * 0.25;
+                            var bottomGap = targetHeight * 0.75;
+                            if (currentYPos > targetHeight / 2)
+                            {
+                                if (expandedTVItem && (currentYPos < topGap || currentYPos > bottomGap))
+                                {
+                                    this.VisualTargetItem = tvItem.ItemContainerGenerator.ContainerFromIndex(0) as UIElement;
+                                    this.TargetItem = this.VisualTargetItem != null ? tvItem.ItemContainerGenerator.ItemFromContainer(this.VisualTargetItem) : null;
+                                    this.TargetCollection = tvItem.ItemsSource ?? tvItem.Items;
+                                    this.InsertIndex = 0;
+                                    this.InsertPosition = RelativeInsertPosition.BeforeTargetItem;
+                                }
+                                else
+                                {
+                                    this.InsertIndex++;
+                                    this.InsertPosition = RelativeInsertPosition.AfterTargetItem;
+                                }
+                            }
+                            else
+                            {
+                                this.InsertPosition = RelativeInsertPosition.BeforeTargetItem;
+                            }
+
+                            if (currentYPos > topGap && currentYPos < bottomGap)
+                            {
+                                if (tvItem != null)
+                                {
+                                    this.TargetCollection = tvItem.ItemsSource ?? tvItem.Items;
+                                    this.InsertIndex = this.TargetCollection != null ? this.TargetCollection.OfType<object>().Count() : 0;
+                                }
+                                this.InsertPosition |= RelativeInsertPosition.TargetItemCenter;
+                            }
+                            //System.Diagnostics.Debug.WriteLine("==> DropInfo: pos={0}, idx={1}, Y={2}, Item={3}", this.InsertPosition, this.InsertIndex, currentYPos, item);
+                        }
+                        else
+                        {
+                            var currentXPos = e.GetTouchPoint(item).Position.X;
+                            var targetWidth = itemRenderSize.Width;
+
+                            if (this.VisualTargetFlowDirection == FlowDirection.RightToLeft)
+                            {
+                                if (currentXPos > targetWidth / 2)
+                                {
+                                    this.InsertPosition = RelativeInsertPosition.BeforeTargetItem;
+                                }
+                                else
+                                {
+                                    this.InsertIndex++;
+                                    this.InsertPosition = RelativeInsertPosition.AfterTargetItem;
+                                }
+                            }
+                            else if (this.VisualTargetFlowDirection == FlowDirection.LeftToRight)
+                            {
+                                if (currentXPos > targetWidth / 2)
+                                {
+                                    this.InsertIndex++;
+                                    this.InsertPosition = RelativeInsertPosition.AfterTargetItem;
+                                }
+                                else
+                                {
+                                    this.InsertPosition = RelativeInsertPosition.BeforeTargetItem;
+                                }
+                            }
+
+                            if (currentXPos > targetWidth * 0.25 && currentXPos < targetWidth * 0.75)
+                            {
+                                if (tvItem != null)
+                                {
+                                    this.TargetCollection = tvItem.ItemsSource ?? tvItem.Items;
+                                    this.InsertIndex = this.TargetCollection != null ? this.TargetCollection.OfType<object>().Count() : 0;
+                                }
+                                this.InsertPosition |= RelativeInsertPosition.TargetItemCenter;
+                            }
+                            //System.Diagnostics.Debug.WriteLine("==> DropInfo: pos={0}, idx={1}, X={2}, Item={3}", this.InsertPosition, this.InsertIndex, currentXPos, item);
+                        }
+                    }
+                    else
+                    {
+                        this.TargetCollection = itemsControl.ItemsSource ?? itemsControl.Items;
+                        this.InsertIndex = itemsControl.Items.Count;
+                        //System.Diagnostics.Debug.WriteLine("==> DropInfo: pos={0}, item=NULL, idx={1}", this.InsertPosition, this.InsertIndex);
+                    }
+                }
+                else
+                {
+                    this.VisualTargetItem = this.VisualTarget;
+                }
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the DropInfo class.
@@ -60,15 +237,7 @@ namespace GongSolutions.Wpf.DragDrop
             }
 
             // try find ScrollViewer
-            if (this.VisualTarget is TabControl)
-            {
-                var tabPanel = this.VisualTarget.GetVisualDescendent<TabPanel>();
-                this.TargetScrollViewer = tabPanel?.GetVisualAncestor<ScrollViewer>();
-            }
-            else
-            {
-                this.TargetScrollViewer = this.VisualTarget?.GetVisualDescendent<ScrollViewer>();
-            }
+            TryToFindScrollViewer();
 
             this.TargetScrollingMode = this.VisualTarget != null ? DragDrop.GetDropScrollingMode(this.VisualTarget) : ScrollingMode.Both;
 
@@ -223,6 +392,19 @@ namespace GongSolutions.Wpf.DragDrop
             else
             {
                 this.VisualTargetItem = this.VisualTarget;
+            }
+        }
+
+        private void TryToFindScrollViewer()
+        {
+            if (this.VisualTarget is TabControl)
+            {
+                var tabPanel = this.VisualTarget.GetVisualDescendent<TabPanel>();
+                this.TargetScrollViewer = tabPanel?.GetVisualAncestor<ScrollViewer>();
+            }
+            else
+            {
+                this.TargetScrollViewer = this.VisualTarget?.GetVisualDescendent<ScrollViewer>();
             }
         }
 

@@ -131,5 +131,47 @@ namespace GongSolutions.Wpf.DragDrop.Utilities
                 return item != sender;
             }
         }
+
+        /// <summary>
+        /// When e.g. original source is part of a popup (e.g. ComboBox drop down), the hit test needs to be done on the original source.
+        /// Because the popup is not attached to the visual tree of the sender.
+        /// This function test this by looping back from the original source to the sender and if it didn't end up at the sender stopped the drag.
+        /// </summary>
+        public static bool IsNotPartOfSender(object sender, TouchEventArgs e)
+        {
+            var visual = e.OriginalSource as Visual;
+            if (visual == null)
+            {
+                return false;
+            }
+
+            var hit = VisualTreeHelper.HitTest(visual, e.GetTouchPoint((IInputElement)visual).Position);
+
+            if (hit == null)
+            {
+                return false;
+            }
+            else
+            {
+                var depObj = e.OriginalSource as DependencyObject;
+                if (depObj == null)
+                {
+                    return false;
+                }
+                if (depObj == sender)
+                {
+                    return false;
+                }
+
+                var item = VisualTreeHelper.GetParent(depObj.FindVisualTreeRoot());
+                //var item = VisualTreeHelper.GetParent(e.OriginalSource as DependencyObject);
+
+                while (item != null && item != sender)
+                {
+                    item = VisualTreeHelper.GetParent(item);
+                }
+                return item != sender;
+            }
+        } 
     }
 }

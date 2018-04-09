@@ -68,17 +68,23 @@ namespace GongSolutions.Wpf.DragDrop
 
             if ((bool)e.NewValue)
             {
-                uiElement.PreviewMouseLeftButtonDown += DragSourceOnMouseLeftButtonDown;
-                uiElement.PreviewMouseLeftButtonUp += DragSourceOnMouseLeftButtonUp;
-                uiElement.PreviewMouseMove += DragSourceOnMouseMove;
+                //uiElement.PreviewMouseLeftButtonDown += DragSourceOnMouseLeftButtonDown;
+                //uiElement.PreviewMouseLeftButtonUp += DragSourceOnMouseLeftButtonUp;
+                //uiElement.PreviewMouseMove += DragSourceOnMouseMove;
                 uiElement.QueryContinueDrag += DragSourceOnQueryContinueDrag;
+                uiElement.PreviewTouchDown += DragSourceOnTouchDown;
+                uiElement.PreviewTouchUp += DragSourceOnTouchUp;
+                uiElement.PreviewTouchMove += DragSourceOnTouchMove;
             }
             else
             {
-                uiElement.PreviewMouseLeftButtonDown -= DragSourceOnMouseLeftButtonDown;
-                uiElement.PreviewMouseLeftButtonUp -= DragSourceOnMouseLeftButtonUp;
-                uiElement.PreviewMouseMove -= DragSourceOnMouseMove;
+                //uiElement.PreviewMouseLeftButtonDown -= DragSourceOnMouseLeftButtonDown;
+                //uiElement.PreviewMouseLeftButtonUp -= DragSourceOnMouseLeftButtonUp;
+                //uiElement.PreviewMouseMove -= DragSourceOnMouseMove;
                 uiElement.QueryContinueDrag -= DragSourceOnQueryContinueDrag;
+                uiElement.PreviewTouchDown -= DragSourceOnTouchDown;
+                uiElement.PreviewTouchUp -= DragSourceOnTouchUp;
+                uiElement.PreviewTouchMove -= DragSourceOnTouchMove;
             }
         }
 
@@ -123,6 +129,9 @@ namespace GongSolutions.Wpf.DragDrop
                     uiElement.DragOver += DropTargetOnDragOver;
                     uiElement.Drop += DropTargetOnDrop;
                     uiElement.GiveFeedback += DropTargetOnGiveFeedback;
+
+                    //touch events
+                    //uiElement.TouchEnter += DropTargetOnDragEnter;
                 }
                 else
                 {

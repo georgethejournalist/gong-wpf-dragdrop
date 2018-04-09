@@ -20,6 +20,125 @@ namespace GongSolutions.Wpf.DragDrop
     public class DragInfo : IDragInfo
     {
         /// <summary>
+        /// Overload for touch dragging.
+        /// </summary>
+        public DragInfo(object sender, TouchEventArgs e)
+        {
+            this.Effects = DragDropEffects.None;
+            this.VisualSource = sender as UIElement;
+            this.DragStartPosition = e.TouchDevice.GetTouchPoint(this.VisualSource).Position;
+            this.DragDropCopyKeyState = DragDropKeyStates.None;
+
+            var dataFormat = DragDrop.GetDataFormat(this.VisualSource);
+            if (dataFormat != null)
+            {
+                this.DataFormat = dataFormat;
+            }
+
+            var sourceElement = e.OriginalSource as UIElement;
+            // If we can't cast object as a UIElement it might be a FrameworkContentElement, if so try and use its parent.
+            if (sourceElement == null && e.OriginalSource is FrameworkContentElement)
+            {
+                sourceElement = ((FrameworkContentElement)e.OriginalSource).Parent as UIElement;
+            }
+
+            if (sender is ItemsControl)
+            {
+                var itemsControl = (ItemsControl)sender;
+
+                this.SourceGroup = itemsControl.FindGroup(this.DragStartPosition);
+                this.VisualSourceFlowDirection = itemsControl.GetItemsPanelFlowDirection();
+
+                UIElement item = null;
+                if (sourceElement != null)
+                {
+                    item = itemsControl.GetItemContainer(sourceElement);
+                }
+
+                if (item == null)
+                {
+                    if (DragDrop.GetDragDirectlySelectedOnly(this.VisualSource))
+                    {
+                        item = itemsControl.GetItemContainerAt(e.GetTouchPoint(itemsControl).Position);
+                    }
+                    else
+                    {
+                        item = itemsControl.GetItemContainerAt(e.GetTouchPoint(itemsControl).Position, itemsControl.GetItemsPanelOrientation());
+                    }
+                }
+
+                if (item != null)
+                {
+                    // Remember the relative position of the item being dragged
+                    this.PositionInDraggedItem = e.GetTouchPoint(item).Position;
+
+                    var itemParent = ItemsControl.ItemsControlFromItemContainer(item);
+
+                    if (itemParent != null)
+                    {
+                        this.SourceCollection = itemParent.ItemsSource ?? itemParent.Items;
+                        if (itemParent != itemsControl)
+                        {
+                            var tvItem = item as TreeViewItem;
+                            if (tvItem != null)
+                            {
+                                var tv = tvItem.GetVisualAncestor<TreeView>();
+                                if (tv != null && tv != itemsControl && !tv.IsDragSource())
+                                {
+                                    return;
+                                }
+                            }
+                            else if (itemsControl.ItemContainerGenerator.IndexFromContainer(itemParent) < 0 && !itemParent.IsDragSource())
+                            {
+                                return;
+                            }
+                        }
+                        this.SourceIndex = itemParent.ItemContainerGenerator.IndexFromContainer(item);
+                        this.SourceItem = itemParent.ItemContainerGenerator.ItemFromContainer(item);
+                    }
+                    else
+                    {
+                        this.SourceIndex = -1;
+                    }
+
+                    var selectedItems = itemsControl.GetSelectedItems().OfType<object>().Where(i => i != CollectionView.NewItemPlaceholder).ToList();
+                    this.SourceItems = selectedItems;
+
+                    // Some controls (I'm looking at you TreeView!) haven't updated their
+                    // SelectedItem by this point. Check to see if there 1 or less item in 
+                    // the SourceItems collection, and if so, override the control's SelectedItems with the clicked item.
+                    //
+                    // The control has still the old selected items at the mouse down event, so we should check this and give only the real selected item to the user.
+                    if (selectedItems.Count <= 1 || this.SourceItem != null && !selectedItems.Contains(this.SourceItem))
+                    {
+                        this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
+                    }
+
+                    this.VisualSourceItem = item;
+                }
+                else
+                {
+                    this.SourceCollection = itemsControl.ItemsSource ?? itemsControl.Items;
+                }
+            }
+            else
+            {
+                this.SourceItem = (sender as FrameworkElement)?.DataContext;
+                if (this.SourceItem != null)
+                {
+                    this.SourceItems = Enumerable.Repeat(this.SourceItem, 1);
+                }
+                this.VisualSourceItem = sourceElement;
+                this.PositionInDraggedItem = sourceElement != null ? e.GetTouchPoint(sourceElement).Position : this.DragStartPosition;
+            }
+
+            if (this.SourceItems == null)
+            {
+                this.SourceItems = Enumerable.Empty<object>();
+            }
+        }
+
+        /// <summary>
         /// Initializes a new instance of the DragInfo class.
         /// </summary>
         /// 
@@ -147,7 +266,7 @@ namespace GongSolutions.Wpf.DragDrop
             }
         }
 
-        internal void RefreshSelectedItems(object sender, MouseEventArgs e)
+        internal void RefreshSelectedItems(object sender)
         {
             if (sender is ItemsControl)
             {
