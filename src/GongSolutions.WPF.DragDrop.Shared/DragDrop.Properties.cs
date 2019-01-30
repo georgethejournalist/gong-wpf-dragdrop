@@ -124,14 +124,18 @@ namespace GongSolutions.Wpf.DragDrop
                 if (uiElement is ItemsControl)
                 {
                     // use normal events for ItemsControls
-                    uiElement.DragEnter += DropTargetOnDragEnter;
-                    uiElement.DragLeave += DropTargetOnDragLeave;
+                    //uiElement.DragEnter += DropTargetOnDragEnter;
+                    //uiElement.DragLeave += DropTargetOnDragLeave;
                     uiElement.DragOver += DropTargetOnDragOver;
                     uiElement.Drop += DropTargetOnDrop;
                     uiElement.GiveFeedback += DropTargetOnGiveFeedback;
 
                     //touch events
                     //uiElement.TouchEnter += DropTargetOnDragEnter;
+                    uiElement.TouchEnter += DropTargetOnDragEnter;
+                    uiElement.TouchLeave += DropTargetOnDragLeave;
+                    //uiElement.DragOver += DragOverWrapperForTouch;
+
                 }
                 else
                 {
@@ -149,11 +153,15 @@ namespace GongSolutions.Wpf.DragDrop
 
                 if (uiElement is ItemsControl)
                 {
-                    uiElement.DragEnter -= DropTargetOnDragEnter;
-                    uiElement.DragLeave -= DropTargetOnDragLeave;
+                    //uiElement.DragEnter -= DropTargetOnDragEnter;
+                    //uiElement.DragLeave -= DropTargetOnDragLeave;
                     uiElement.DragOver -= DropTargetOnDragOver;
                     uiElement.Drop -= DropTargetOnDrop;
                     uiElement.GiveFeedback -= DropTargetOnGiveFeedback;
+
+                    //unsubscribe from touch events
+                    uiElement.TouchEnter -= DropTargetOnDragEnter;
+                    uiElement.TouchLeave -= DropTargetOnDragLeave;
                 }
                 else
                 {
@@ -504,6 +512,28 @@ namespace GongSolutions.Wpf.DragDrop
                                                   typeof(Point),
                                                   typeof(DragDrop),
                                                   new PropertyMetadata(new Point(0, 1)));
+
+        //TODO remove
+        /// <summary>
+        /// Gets or Sets the horizontal and vertical proportion at which the touch pointer will anchor on the DragAdorner.
+        /// </summary>
+        public static readonly DependencyProperty DragTouchAnchorPointProperty = 
+            DependencyProperty.RegisterAttached(
+                "DragTouchAnchorPoint", 
+                typeof(Point), 
+                typeof(DragDrop), 
+                new PropertyMetadata(new Point(0,1)));
+
+
+        public static Point GetDragTouchAnchorPoint(UIElement target)
+        {
+            return (Point) target.GetValue(DragTouchAnchorPointProperty);
+        }
+
+        public static void SetDragTouchAnchorPoint(UIElement target, Point value)
+        {
+            target.SetValue(DragTouchAnchorPointProperty, value);
+        }
 
         /// <summary>
         /// Gets the horizontal and vertical proportion at which the pointer will anchor on the DragAdorner.

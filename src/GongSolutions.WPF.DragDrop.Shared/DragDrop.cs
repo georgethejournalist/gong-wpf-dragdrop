@@ -522,8 +522,15 @@ namespace GongSolutions.Wpf.DragDrop
 
             var dragInfo = m_DragInfo;
 
-            //m_DragInfo = null;
-            //m_ClickSupressItem = null;
+            var itemsControl = sender as ItemsControl;
+            if (itemsControl != null && dragInfo != null && m_ClickSupressItem != null && m_ClickSupressItem == dragInfo.SourceItem)
+            {
+                itemsControl.SetSelectedItem(dragInfo.SourceItem);
+            }
+
+            m_DragInfo = null;
+            m_ClickSupressItem = null;
+
         }
 
         private static void DoMouseButtonUp(object sender, MouseButtonEventArgs e)
@@ -559,6 +566,8 @@ namespace GongSolutions.Wpf.DragDrop
 
         private static void DragSourceOnTouchMove(object sender, TouchEventArgs e)
         {
+            _touchDevice = e.TouchDevice;
+
             //TODO do the rest, then hook the event up
             var dragInfo = m_DragInfo;
             if (dragInfo != null && !m_DragInProgress)
@@ -647,6 +656,7 @@ namespace GongSolutions.Wpf.DragDrop
                             var dragDropEffects = System.Windows.DragDrop.DoDragDrop(dragInfo.VisualSource, dataObject, dragInfo.Effects);
                             if (dragDropEffects == DragDropEffects.None)
                             {
+                                //TODO check whether this is ever useful for our usecase
                                 //dragHandler.DragCancelled();
                             }
                             dragHandler.DragDropOperationFinished(dragDropEffects, dragInfo);
@@ -689,6 +699,13 @@ namespace GongSolutions.Wpf.DragDrop
             DropTargetOnDragOver(sender, e);
         }
 
+        private static void DropTargetOnDragLeave(object sender, TouchEventArgs e)
+        {
+            DragAdorner = null;
+            EffectAdorner = null;
+            DropTargetAdorner = null;
+        }
+
         private static void DropTargetOnDragLeave(object sender, DragEventArgs e)
         {
             DragAdorner = null;
@@ -696,10 +713,22 @@ namespace GongSolutions.Wpf.DragDrop
             DropTargetAdorner = null;
         }
 
+        // unnecessary, dragover can be universal
+        private static void DragOverWrapperForTouch(object sender, DragEventArgs e)
+        {
+            
+            var touchArgs = new TouchEventArgs(_touchDevice, DateTime.Now.Millisecond);
+            touchArgs.RoutedEvent = e.RoutedEvent;
+            touchArgs.Source = e.Source;
+            DropTargetOnTouchDragOver(sender, touchArgs);
+
+            //Rerouting events - interesting
+            //(sender as UIElement).RaiseEvent(new TouchEventArgs(_touchDevice, DateTime.Now.Millisecond) { RoutedEvent = UIElement.DragOverEvent }); ;
+        }
+
         private static void DropTargetOnTouchDragOver(object sender, TouchEventArgs e)
         {
             var elementPosition = e.GetTouchPoint((IInputElement)sender).Position;
-            //TODO do the rest
             var dragInfo = m_DragInfo;
             var dropInfo = new DropInfo(sender, e, dragInfo);
             var dropHandler = TryGetDropHandler(dropInfo, sender as UIElement);
@@ -1033,7 +1062,7 @@ namespace GongSolutions.Wpf.DragDrop
             get { return _DropTargetAdorner; }
             set
             {
-                _DropTargetAdorner?.Detatch();
+                _DropTargetAdorner?.Detach();
                 _DropTargetAdorner = value;
             }
         }
@@ -1043,5 +1072,6 @@ namespace GongSolutions.Wpf.DragDrop
         private static object m_ClickSupressItem;
         private static Point _adornerPos;
         private static Size _adornerSize;
+        private static TouchDevice _touchDevice;
     }
 }

@@ -31,7 +31,7 @@ namespace GongSolutions.Wpf.DragDrop
         /// </summary>
         public Pen Pen { get; set; } = new Pen(Brushes.Gray, 2);
 
-        public void Detatch()
+        public void Detach()
         {
             this.m_AdornerLayer.Remove(this);
         }
